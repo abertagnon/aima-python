@@ -396,8 +396,10 @@ def mrv(assignment, csp):
 
 def num_legal_values(csp, var, assignment):
     """Return how many values are still legal for var (used by the mrv heuristic):
-    the size of its current domain if pruning is active, otherwise the number of
-    domain values that conflict with no other variable in the assignment."""
+    the size of its current domain if pruning is active (i.e. an inference procedure
+    such as forward_checking or mac keeps csp.curr_domains consistent with the
+    assignment), otherwise the number of domain values that conflict with no other
+    variable in the assignment."""
     if csp.curr_domains:
         return len(csp.curr_domains[var])
     else:
@@ -439,8 +441,13 @@ def forward_checking(csp, var, value, assignment, removals):
 
 
 def mac(csp, var, value, assignment, removals, constraint_propagation=AC3b):
-    """Maintain arc consistency."""
-    return constraint_propagation(csp, {(X, var) for X in csp.neighbors[var]}, removals)
+    """Maintain arc consistency: propagate from the arcs (X, var) and return False
+    if a domain is wiped out. The constraint propagation functions (AC3, AC3b, AC4)
+    return a pair (is_consistent, checks); only the first element is the outcome of
+    the inference, so it is the one returned here (a non-empty tuple is always truthy,
+    which would make backtracking_search ignore every wipe-out)."""
+    consistent, _ = constraint_propagation(csp, {(X, var) for X in csp.neighbors[var]}, removals)
+    return consistent
 
 
 # The search, proper
@@ -457,7 +464,11 @@ def backtracking_search(csp, select_unassigned_variable=first_unassigned_variabl
         for value in order_domain_values(var, assignment, csp):
             if 0 == csp.nconflicts(var, value, assignment):
                 csp.assign(var, value, assignment)
-                removals = csp.suppose(var, value)
+                # The current domains (csp.curr_domains) are needed only by an inference
+                # procedure that prunes them. Enabling them without inference would make
+                # num_legal_values (and so mrv) read unpruned domain sizes, turning MRV
+                # into a random choice among ties.
+                removals = csp.suppose(var, value) if inference is not no_inference else []
                 if inference(csp, var, value, assignment, removals):
                     result = backtrack(assignment)
                     if result is not None:
@@ -632,13 +643,18 @@ def parse_neighbors(neighbors):
     regions to neighbors. The syntax is a region name followed by a ':'
     followed by zero or more region names, followed by ';', repeated for
     each region name. If you say 'X: Y' you don't need 'Y: X'.
+    A region with no neighbors is written as 'X: ' and is kept with an empty list.
     >>> parse_neighbors('X: Y Z; Y: Z') == {'Y': ['X', 'Z'], 'X': ['Y', 'Z'], 'Z': ['X', 'Y']}
+    True
+    >>> parse_neighbors('X: Y; T: ') == {'X': ['Y'], 'Y': ['X'], 'T': []}
     True
     """
     dic = defaultdict(list)
     specs = [spec.split(':') for spec in neighbors.split(';')]
     for (A, Aneighbors) in specs:
         A = A.strip()
+        if A:
+            dic.setdefault(A, [])  # keep regions with no neighbors, e.g. 'T: '
         for B in Aneighbors.split():
             dic[A].append(B)
             dic[B].append(A)

@@ -323,6 +323,25 @@ def test_mrv():
     assert mrv(assignment, csp) == 'C'
 
 
+def test_mrv_without_inference():
+    # without inference backtracking_search must not enable the current domains,
+    # otherwise mrv reads unpruned domain sizes and picks variables at random
+    csp = MapColoringCSP(list('RGB'), 'SA: WA NT Q NSW V; NT: WA Q; NSW: Q V; T: ')
+    assert backtracking_search(csp) is not None
+    assert csp.curr_domains is None
+
+    for seed in range(20):
+        random.seed(seed)
+        csp = MapColoringCSP(list('RGB'), 'SA: WA NT Q NSW V; NT: WA Q; NSW: Q V; T: ')
+        assert backtracking_search(csp, select_unassigned_variable=mrv) is not None
+        assert csp.nassigns == len(csp.variables)  # MRV never needs to backtrack here
+
+    random.seed("aima-python")
+    csp = MapColoringCSP(list('RGBY'), usa_csp.neighbors)
+    assert backtracking_search(csp, select_unassigned_variable=mrv) is not None
+    assert csp.nassigns < 2 * len(csp.variables)
+
+
 def test_unordered_domain_values():
     map_coloring_test = MapColoringCSP(list('123'), 'A: B C; B: C; C: ')
     assignment = None
@@ -468,6 +487,14 @@ def test_universal_dict():
 
 def test_parse_neighbours():
     assert parse_neighbors('X: Y Z; Y: Z') == {'Y': ['X', 'Z'], 'X': ['Y', 'Z'], 'Z': ['X', 'Y']}
+
+
+def test_parse_neighbours_keeps_isolated_regions():
+    # a region with no neighbors ('T: ') must not be dropped
+    assert parse_neighbors('X: Y; T: ') == {'X': ['Y'], 'Y': ['X'], 'T': []}
+    assert 'T' in australia_csp.variables
+    assert {'HI', 'AK'} <= set(usa_csp.variables)
+    assert 'T' in backtracking_search(MapColoringCSP(list('RGB'), 'SA: WA NT Q NSW V; NT: WA Q; NSW: Q V; T: '))
 
 
 def test_topological_sort():
@@ -660,13 +687,24 @@ def test_mac():
     assignment = {'A': 1}
 
     csp = CSP(variables=None, domains=domains, neighbors=neighbors, constraints=constraints)
-    consistency, _ = mac(csp, var, value, assignment, None)
-    assert not consistency
+    assert mac(csp, var, value, assignment, None) is False
 
     constraints = lambda X, x, Y, y: x % 2 != 0 and (x + y) == 6 and y % 2 != 0
     csp = CSP(variables=None, domains=domains, neighbors=neighbors, constraints=constraints)
-    _, consistency = mac(csp, var, value, assignment, None)
-    assert consistency
+    assert mac(csp, var, value, assignment, None) is True
+
+    # the outcome must be a boolean for every constraint propagation algorithm
+    for propagation in (AC3, AC3b, AC4):
+        csp = CSP(variables=None, domains=domains, neighbors=neighbors, constraints=constraints)
+        assert mac(csp, var, value, assignment, None, constraint_propagation=propagation) is True
+
+
+def test_mac_prunes_backtracking_search():
+    # two colors are not enough for Australia: after the first assignment MAC wipes out
+    # a domain, so backtracking_search must give up on that value immediately
+    csp = MapColoringCSP(list('RG'), 'SA: WA NT Q NSW V; NT: WA Q; NSW: Q V; T: ')
+    assert backtracking_search(csp, inference=mac) is None
+    assert csp.nassigns == 2
 
 
 def test_queen_constraint():
