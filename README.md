@@ -2,6 +2,19 @@
 
 # `aima-python` [![tests](https://github.com/aimacode/aima-python/actions/workflows/tests.yml/badge.svg)](https://github.com/aimacode/aima-python/actions/workflows/tests.yml) [![docs](https://github.com/aimacode/aima-python/actions/workflows/docs.yml/badge.svg)](https://aimacode.github.io/aima-python/) [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/aimacode/aima-python/master) [![lite-badge](https://jupyterlite.rtfd.io/en/latest/_static/badge.svg)](https://aimacode.github.io/aima-python/lite/)
 
+> **Fork used in the CSP lab of *Fondamenti di Intelligenza Artificiale*, University of Ferrara.**
+> Identical to [aimacode/aima-python](https://github.com/aimacode/aima-python) at commit `f104e03`, plus three fixes
+> to `aima/csp.py` (with regression tests in `tests/test_csp.py`):
+>
+> * `mac` returns a boolean again: it returned the `(is_consistent, checks)` pair of AC-3, which is always truthy,
+>   so `backtracking_search` never noticed a domain wipe-out;
+> * `mrv` works without inference: `backtracking_search` enabled `curr_domains` even with `no_inference`,
+>   so MRV saw unpruned domains and chose at random among ties;
+> * `parse_neighbors` keeps regions with no neighbors (Tasmania in `australia_csp`, Hawaii and Alaska in `usa_csp`).
+>
+> To install this version (e.g. on Google Colab): `pip install sortedcontainers` and then
+> `pip install --no-deps "git+<URL of this repository>.git@lab-csp-2026"`.
+
 
 Python code for the book *[Artificial Intelligence: A Modern Approach](http://aima.cs.berkeley.edu).* You can use this in conjunction with a course on AI, or for study on your own. We're looking for [solid contributors](https://github.com/aimacode/aima-python/blob/master/CONTRIBUTING.md) to help.
 
